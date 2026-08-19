@@ -200,7 +200,11 @@ Add the local server as a custom provider in `~/.config/opencode/opencode.jsonc`
       },
       "models": {
         "qwen/qwen3.6-35b-a3b": {
-          "name": "Qwen 3.6 35B A3B"
+          "name": "Qwen 3.6 35B A3B",
+          "options": {
+            "temperature": 0.3,
+            "top_p": 0.9
+          }
         }
       }
     }
@@ -210,6 +214,13 @@ Add the local server as a custom provider in `~/.config/opencode/opencode.jsonc`
 
 The `"model"` key makes it the default so you don't need `--model` on every run.
 LM Studio's server has to be running (Phase 6, headless mode) for this to work.
+
+The `temperature`/`top_p` override matters more than it looks — see the benchmark
+below. OpenCode's own default is `top_p: 1` (fully open sampling), but Qwen's
+docs and community coding benchmarks recommend a tighter `temperature 0.1–0.3,
+top_p ~0.9` for agentic/tool-calling accuracy. In testing this made the model
+reliably reach for the correct built-in tool on the first try instead of
+improvising with shell commands.
 
 ```bash
 # One-off task
@@ -221,6 +232,69 @@ opencode
 
 For an Ollama backend instead, swap the `baseURL` to
 `http://localhost:11434/v1` and the model id to your `ollama pull`'d tag.
+
+Also drop an `AGENTS.md` in your project root with any environment quirks the
+model should know up front (e.g. "this is macOS — `grep` has no `-P`, use
+`sed -E` or Python instead"). OpenCode reads it automatically as project
+context. A starter is bundled at
+[`templates/AGENTS.md.example`](templates/AGENTS.md.example) — copy it in and
+extend it with your own project's quirks. In testing this didn't reliably fix
+retries by itself (see below) — local models don't always follow it
+consistently run to run — but it's free and occasionally helps, so there's no
+reason to skip it.
+
+### Can it search the internet through OpenCode?
+
+Sort of, not really. OpenCode gives the model a `WebFetch` tool that retrieves
+a URL you (or the model) already knows — there's no Google/Bing-style search
+behind it. So it can read a page, it can't discover one. If you need "search
+the web for X," pair OpenCode with an MCP server that provides real search
+(e.g. a Brave/Tavily search MCP) — macllm doesn't set this up for you.
+
+### Real numbers — tested on a 64 GB M5 Pro, `qwen/qwen3.6-35b-a3b` MLX 4-bit
+
+**Task 1 — fetch a live URL** ("get the current HN top story title and save it
+to a file"):
+
+| Run | Sampling | Result | Tool calls | Wall time |
+|---|---|---|---|---|
+| 1 (baseline) | `top_p: 1` (OpenCode default) | ✅ correct, but improvised with `curl`/`grep`, hit BSD-vs-GNU `grep -P` failure | 6 | 68.3s |
+| 2 (+ `AGENTS.md` hint) | `top_p: 1` | ✅ correct, different bug this time (Python typo), hint didn't get used | 4 | 66.9s |
+| 3 (+ tuned sampling) | `temperature: 0.3, top_p: 0.9` | ✅ correct, went straight to the built-in `WebFetch` tool | **1** | **38.8s** |
+
+Sampling tuning was the variable that actually mattered here — not the prompt
+hint. Small sample size (one task, one seed each), so treat this as a
+directional signal, not a statistically rigorous benchmark.
+
+**Task 2 — genuinely hard coding task:** implement a thread-safe LRU cache with
+per-key TTL eviction (stdlib only, O(1) ops), write pytest coverage for basic
+ops/LRU order/TTL expiry/thread-safety, run the tests, fix whatever's broken.
+
+- **Total wall time: 5m 18s** (CPU time only ~35s of that — most of the wall
+  clock was model inference between tool calls, not execution)
+- **Tool calls:** 2 file writes, 4 edits, ~11 shell calls, 1 read
+- **Test iterations:** 19 failed / 12 passed → 2 failed / 29 passed → **31 / 31
+  passed**
+- **Real bugs found and fixed**, not just retried:
+  1. `delete()` wasn't checking TTL, so expired keys were deletable and
+     returned `True` incorrectly.
+  2. Eviction only cleared one expired entry per `put()` instead of all of
+     them, leaving stale entries when the cache was full of expired data.
+  3. Called `OrderedDict.first_key()`, which doesn't exist — self-corrected to
+     `next(iter(self._cache))`.
+- **Friction point worth knowing about:** it burned real time (~5 tool calls)
+  fighting `pip install pytest` on a `uv`-managed macOS Python — hit PEP 668's
+  "externally managed environment" error, then several failed attempts before
+  landing on `uv venv .venv && uv pip install pytest -p .venv/bin/python`. If
+  your Mac uses `uv` for Python, expect this exact stumble; putting a note in
+  `AGENTS.md` about how to install packages in your environment removes it.
+
+**Bottom line:** it gets to a fully correct, fully tested result — but expect
+5x-ish wall-clock overhead versus a hosted frontier model on anything nontrivial,
+mostly from inference latency between tool calls and from environment-specific
+trial and error it has to discover itself. Tuning `temperature`/`top_p` and
+giving it environment context up front (`AGENTS.md`) both help; neither closes
+the gap entirely.
 
 **Note:** local models — even good ones — are less reliable at multi-step tool use
 than frontier hosted models. Expect more retries on longer agentic tasks; this is a

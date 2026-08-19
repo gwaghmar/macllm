@@ -1,0 +1,13 @@
+# Environment notes
+
+- This is macOS. The shell tools are BSD/macOS versions, not GNU.
+  - `grep` has no `-P` (Perl regex). Use `sed -E` or Python's `re` for anything
+    beyond basic/extended regex.
+  - `sed` is BSD sed: `-i` requires an explicit backup suffix argument (e.g.
+    `sed -i '' 's/a/b/'`), unlike GNU sed's `-i` with no argument.
+  - Prefer `python3` for any nontrivial text parsing (HTML, JSON, regex) instead
+    of chaining grep/sed/awk — it's more reliable and avoids BSD/GNU flag
+    mismatches entirely.
+- Python package installs may be `uv`-managed (PEP 668 "externally managed
+  environment"). Use `uv venv .venv && uv pip install -p .venv/bin/python
+  <pkg>` rather than a bare `pip install`.
