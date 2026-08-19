@@ -84,18 +84,18 @@ two things that actually govern speed on a Mac.
 
 ```mermaid
 flowchart LR
-    subgraph Model choice
+    subgraph choice[Model choice]
       M1[MoE, few active params] --> M2[4-bit quant] --> M3[MLX build]
     end
-    subgraph Runtime
+    subgraph runtime[Runtime]
       R1[Thinking OFF by default] --> R2[Keep model loaded]
       R2 --> R3[Context length 16k]
       R3 --> R4[Flash attn + KV q8<br/>long context]
     end
-    subgraph Verify
+    subgraph verify[Verify]
       V1[Speculative decoding?<br/>benchmark — keep only if it helps]
     end
-    Model choice --> Runtime --> Verify
+    choice --> runtime --> verify
 ```
 
 ---
