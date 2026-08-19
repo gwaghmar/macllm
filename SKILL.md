@@ -4,10 +4,11 @@ description: >-
   Install and speed-optimize a local LLM on an Apple Silicon Mac (M1–M5). Use
   when the user wants to run an AI model locally, set up Ollama or LM Studio,
   pick the best local model for their Mac's RAM, make a local model faster, use
-  MLX on Apple Silicon, or get an offline/private ChatGPT alternative. Detects
+  MLX on Apple Silicon, wire a local model into an agent harness like OpenCode
+  for agentic coding, or get an offline/private ChatGPT alternative. Detects
   the machine, researches the current best model live, asks permission, installs,
-  applies every known Apple Silicon speed optimization, benchmarks, and sets it
-  to auto-start.
+  applies every known Apple Silicon speed optimization plus agentic tool-calling
+  accuracy tuning, benchmarks, and sets it to auto-start.
 ---
 
 # macllm — install & optimize a local LLM on a Mac
@@ -184,6 +185,29 @@ big model can give ~1.5–2× when it works. Status is fast-moving:
 much smaller *dense* model often runs at the *same* tokens/sec as a good MoE
 (bytes-per-token is similar) while being far dumber. Only drop size to fit memory,
 not to chase speed. State this if the user asks for "a faster smaller model."
+
+**8. Tune sampling for agentic/tool-calling use (accuracy, not speed).** If the
+user is wiring the model into an agent harness (OpenCode, Cline, Continue — see
+"Using it with OpenCode" in the README), sampling defaults matter more than
+people expect. Agent harnesses often default to `top_p: 1` (fully open
+sampling), but Qwen's own docs and community coding benchmarks recommend
+`temperature 0.1–0.3, top_p ~0.9` for tool-calling accuracy. In testing
+(documented in the README benchmark table) this was the single biggest lever
+for getting the model to reach for the correct built-in tool instead of
+improvising a worse workaround with shell commands — cut one task from 6 tool
+calls/68s to 1 call/38.8s. Set it in the harness's model config (e.g.
+OpenCode's `opencode.jsonc` → `provider.<name>.models.<model>.options`), not
+in LM Studio, since LM Studio has no global default-sampling setting that
+survives per-request overrides.
+
+**9. Give the model environment context up front.** Local models will happily
+try GNU-only flags (`grep -P`) on macOS's BSD toolchain, or `pip install` on a
+`uv`-managed Python, and burn several tool-call retries discovering the
+failure themselves. Drop an `AGENTS.md` in the project root (OpenCode and
+similar harnesses read it automatically) — a starter is bundled at
+`templates/AGENTS.md.example`. Set expectations honestly: this reduced retries
+inconsistently in testing, not reliably, because local models don't always
+follow it run to run — but it's free, so apply it anyway.
 
 ## Phase 6 — Auto-start (make it always available)
 
