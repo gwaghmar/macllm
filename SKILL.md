@@ -156,8 +156,16 @@ costs ~10–20 s; don't pay it repeatedly.
 **4. Set a sane context length.** A huge context window inflates the KV cache and
 slows every token. 16k is a good default for real documents; only go higher if the
 user needs it.
-- LM Studio: model load settings → **Context Length** → 16384.
+- LM Studio: `lms load <model> -c 16384`, or model load settings → **Context Length**.
 - Ollama: `OLLAMA_CONTEXT_LENGTH=16384` or a Modelfile `PARAM num_ctx 16384`.
+- **Caveat on high-RAM Macs:** LM Studio has a **context auto-fit** feature that
+  silently expands the loaded context back toward the model's max whenever free
+  RAM comfortably allows it — it will override a manually configured value (check
+  the server log for a line like `configured=16,384 fitted=262,144` to confirm).
+  This mostly costs reserved RAM rather than generation speed (attention cost
+  scales with tokens actually in the prompt, not the ceiling), so on a 64 GB+ Mac
+  it's often fine to leave at the auto-fit value. Mention this if the user asks
+  why their context length setting "isn't sticking."
 
 **5. Flash attention + quantized KV cache (helps long context on Ollama/GGUF).**
 ```bash

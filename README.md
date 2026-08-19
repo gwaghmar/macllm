@@ -164,10 +164,67 @@ Once installed, point any OpenAI-compatible tool at the local server:
 
 - **Chat UI:** open the LM Studio app and type, like ChatGPT.
 - **In your editor:** point Continue or Cline at the base URL above.
+- **Agentic coding (file writes, running commands):** point
+  [OpenCode](https://opencode.ai) at the local server — see below.
 - **Private document Q&A / RAG:** run [Open WebUI](https://docs.openwebui.com/) on
   top of the local server for a full ChatGPT-style interface with file upload.
 - **Turn thinking off** for instant answers: send `"reasoning_effort": "none"` in the
   API request, or toggle the **Think** button off in the LM Studio chat.
+
+---
+
+## Using it with OpenCode
+
+A raw chat UI can only *describe* a file or a shell command — it can't create or run
+one. [OpenCode](https://opencode.ai) is the agent harness: it gives the model tools
+(write files, run shell commands, edit code) and executes what the model calls. The
+model your `qwen3.6-35b-a3b` MLX build ships with `tool_use` capability, so it works
+out of the box.
+
+```bash
+brew install opencode
+```
+
+Add the local server as a custom provider in `~/.config/opencode/opencode.jsonc`:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "lmstudio/qwen/qwen3.6-35b-a3b",
+  "provider": {
+    "lmstudio": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LM Studio (local)",
+      "options": {
+        "baseURL": "http://localhost:1234/v1"
+      },
+      "models": {
+        "qwen/qwen3.6-35b-a3b": {
+          "name": "Qwen 3.6 35B A3B"
+        }
+      }
+    }
+  }
+}
+```
+
+The `"model"` key makes it the default so you don't need `--model` on every run.
+LM Studio's server has to be running (Phase 6, headless mode) for this to work.
+
+```bash
+# One-off task
+opencode run "create hello.py that prints hello world, then run it"
+
+# Interactive
+opencode
+```
+
+For an Ollama backend instead, swap the `baseURL` to
+`http://localhost:11434/v1` and the model id to your `ollama pull`'d tag.
+
+**Note:** local models — even good ones — are less reliable at multi-step tool use
+than frontier hosted models. Expect more retries on longer agentic tasks; this is a
+model-capability limit, not a config problem.
 
 ---
 
